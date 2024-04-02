@@ -3,12 +3,43 @@
 //
 // Results:
 // Base algo
-// N = 100 : 790 microseconds.
-// Chebyshev's norm =  0.0000000000 in aij = 4679.7271500924
-// The maximum error is 0.0000000000425618704875199223603516084370 % 
-// 
-//
-//
+// Matrix size = 1000
+// Chebyshev's norm =  0.0000000000 in aij = 45673.6244748528
+// The maximum error is 0.0000000033231935576515983784044876744694 % 
+// Cholesky decomposition time : 702507 microseconds.
+// _______________________________________________________________________________
+// Block algo
+// Matrix size = 1000
+// A block size = 500
+// Chebyshev's norm =  0.0000000002 in aij = 48956.1380986460
+// The maximum error is 0.0000000819266407247675735386760876959034 % 
+// Cholesky decomposition time : 1981307 microseconds.
+// _______________________________________________________________________________
+// Matrix size = 1000
+// A block size = 14
+// Chebyshev's norm =  0.0000000000 in aij = 46268.2689926411
+// The maximum error is 0.0000000134658385628837684352311366555929 % 
+// Cholesky decomposition time : 677767 microseconds.
+//27.03.24
+// _______________________________________________________________________________
+// Matrix size = 1000
+// Chebyshev's norm =  0.0000000000 in aij = 45673.6244748528
+// The maximum error is 0.0000000033231935576515983784044
+// Cholesky decomposition time : 743138 microseconds.
+// _______________________________________________________________________________
+// Matrix size = 1000
+// A block size = 14
+// Chebyshev's norm =  0.0000000000 in aij = 46268.2689926411
+// The maximum error is 0.0000000134658385628837684352311366555929 % 
+// Cholesky decomposition time : 733998 microseconds.
+// _______________________________________________________________________________
+// Matrix size = 1000
+// A block size = 500
+// Chebyshev's norm =  0.0000000002 in aij = 48956.1380986460
+// The maximum error is 0.0000000819266407247675735386760876959034 % 
+// Cholesky decomposition time : 1784482 microseconds.
+// //
+// еще 30 - 50
 // Block method
 // 
 // D(-1) = inverse matrix D
@@ -23,320 +54,330 @@
 //       \/
 //     | L(D)        0    |
 // L = | BL(-1)(D)   L(s) |
-void Cholesky::Cholesky_dec_block(){
-    //split matrix A into blocks
-    matrix D(d_size);
-    matrix LD(d_size);
-    matrix C(c_size);
-    matrix S(c_size);
-    FP* B = new FP[d_size*c_size];
-    FP* BD = new FP[d_size*c_size];
-    FP* BLD = new FP[d_size*c_size];
-    size_t tmp_C = 0;
-    size_t tmp_B = d_size*(d_size + 1)/2;
-    size_t tmp_LA = tmp_B;
-    std::memcpy(D.m, A.m, tmp_B * sizeof(FP));
-    for(size_t i = 0; i < c_size; i++){
-        tmp_C += i;
-        std::memcpy(B + i * d_size, A.m + tmp_B, d_size * sizeof(FP));
-        std::memcpy(C.m + tmp_C, A.m + d_size*(d_size + 1)/2 + d_size*(i+1) + tmp_C, (i + 1) * sizeof(FP));
-        tmp_B += d_size + i + 1;
+void Cholesky::Cholesky_dec_block(size_t n) {
+    if (N - n <= d_size*2) {
+        // block (d_size * 2)*(d_size * 2 + 1)/2
+        Cholesky_dec(n, N);
+        return;
     }
-    // end of spliting
-    Cholesky_dec(D,LD); // LD
-    std::memcpy(LA.m, LD.m, (d_size*(d_size+1)/2)*sizeof(FP));
-    //LD.Print();
-    inverse_lower(LD); // LD(-1)
-    //LD.Print();
-    //Print_matrix(B);
-    multiplication_lower(B, LD, BLD); // B*LD(-1)
-    //Print_matrix(BLD);
-    for(size_t i = 0; i < c_size; i++){
-        std::memcpy(LA.m + tmp_LA + i*(d_size), BLD + i*d_size, d_size * sizeof(FP));
-        tmp_LA += i + 1;
-    }
-    inverse_matrix(D); // D(-1)
-    multiplication_matrix(B, D, BD); // B*D(-1)
-    multiplication_and_subtraction_matrix(BD, B, C); // C - B'D(-1)B 
-    Cholesky_dec(C,C); // L(C - B'D(-1)B)
-    tmp_LA = (d_size*(d_size+1)/2) + d_size;
-    tmp_C = 0;
-    for(size_t i = 0; i < c_size; i++){
-        std::memcpy(LA.m + tmp_LA + i*(d_size), C.m + tmp_C, (i+1) * sizeof(FP));
-        tmp_LA += i + 1;
-        tmp_C += i + 1;
-    }
-    Print_symmetric_matrix(A);
-    LA.Print();
+    //else
+    // memory d_size*(d_size+1) + 2*d_size*d_size
+    inverse_matrix(n);
+    // memory 3*d_size*d_size
+    double_multiplication_and_subtraction_matrix(n);
+    // memory d_size*(d_size+1)/2
+    Cholesky_dec(n, n + d_size); // LD
+    // memory d_size*(d_size+1)
+    inverse_lower(n);// L(-1)(D)
+    c_size = N - n - d_size;
+    // memory 2*d_size*d_size + d_size*(d_size+1)/2
+    multiplication_lower(n);
+    //return;
+    Cholesky_dec_block(n + d_size);
 
-    delete[] B;
-    delete[] BD;
-    delete[] BLD;
 }
 
-void Cholesky::multiplication_matrix(FP* B, matrix& M, FP* dest){
-    size_t i,j,k;
-    size_t rows = c_size;
-    size_t cols = d_size;
-    for(i = 0; i < rows; i++){
-        for(j = 0; j < cols; j++){
-            for(k = 0; k < j; k++){
-                dest[i*cols + j] += B[i*cols + k] * M(k,j);
-            }
-            for(k = j; k < cols; k++){
-                dest[i*cols + j] += B[i*cols + k] * M(j,k);
+void Cholesky::double_multiplication_and_subtraction_matrix(size_t begin) {
+    size_t end = begin + d_size;
+    size_t j, k, p, h;
+    size_t i = begin + d_size;//current row
+    size_t number_of_blocks = (c_size - 1)/ d_size + 1;
+    size_t tmp_1 = 0;
+    for(p = 0; p < number_of_blocks; p++){
+        std::memset(B, 0, d_size * d_size * sizeof(FP));
+        size_t len_of_block = std::min(d_size, N - i);
+        size_t tmp = len_of_block + i;
+        for (; i < tmp; i++) {
+            for (j = begin; j < end; j++) {
+                for (k = begin; k < j; k++) {
+                    B[(i % d_size)*d_size + (j - begin)] += D(k - begin, j - begin)  * LA(k, i);
+                }
+                for (k = j; k < end; k++){
+                    B[(i % d_size)*d_size + (j - begin)] += D(j - begin, k - begin)  * LA(k, i);
+                }               
             }
         }
-    }
-}
-
-void Cholesky::multiplication_and_subtraction_matrix(FP* A, FP* B, matrix& dest){
-    size_t i,j,k;
-    for(i = 0; i < c_size; i++){
-        for(j = 0; j <= i; j++){
-            for(k = 0; k < d_size; k++){
-                dest(j, i) -= A[i*d_size + k] * B[j*d_size + k];
-            }
-
-        }
-    }
-}
-
-void Cholesky::multiplication_lower(FP* B, matrix& M, FP* dest){
-    size_t i,j,k;
-    size_t rows = c_size;
-    size_t cols = d_size;
-    for(i = 0; i < rows; i++){
-        for(j = 0; j < cols; j++){
-            for(k = j; k < cols; k++){
-                dest[i*cols + j] += B[i*cols + k] * M(j,k);
+        //print(B, d_size);
+        for(h = 0; h < tmp_1; h++){
+            for(i = begin + d_size*(p+1); i < begin + d_size*(p+1) + len_of_block; i++){
+                for(j = begin + d_size*(h+1); j < begin + d_size*(h+2); j++){
+                    for(k = begin + d_size*(h+1); k < begin + d_size*(h+2); k++){
+                        //std::cout<<i<<' '<<j<<' '<<(i % d_size)*d_size<<' '<<(k - begin - d_size*(h+1))<<' '<<LA(k-d_size*(h+1), j)<<' '<<B[(i % d_size)*d_size + (k - begin - d_size*(h+1))]<<"   ";
+                        LA(j, i) -= B[(i % d_size)*d_size + (k - begin - d_size*(h+1))] * LA(k-d_size*(h+1), j);
+                    }
+                    //std::cout<<std::endl;
+                }
             }
         }
+        for(i = begin + d_size*(p+1); i < begin + d_size*(p+1) + len_of_block; i++){
+            for(j = begin + d_size*(p+1); j <= i; j++){
+                for(k = begin + d_size*(p+1); k < begin + d_size*(p+2); k++){
+                    LA(j, i) -= B[(i % d_size)*d_size + (k - begin - d_size*(p+1))] * LA(k-d_size*(p+1), j);
+                }
+            }
+        }
+        tmp_1++;
     }
+
+
+
 }
 
-void Cholesky::inverse_matrix(matrix& M){
-    size_t n = M.matrix_size;
+// void Cholesky::multiplication_and_subtraction_matrix(const FP* A, const FP* B, matrix& dest) {
+//     size_t i, j, k;
+//     for (i = 0; i < dest.matrix_size; i++) {
+//         for (j = 0; j <= i; j++) {
+//             for (k = 0; k < d_size; k++) {
+//                 dest(j, i) -= A[i * d_size + k] * B[j * d_size + k];
+//             }
+
+//         }
+//     }
+// }
+
+void Cholesky::multiplication_lower(size_t begin) {
+    size_t end = begin + d_size;
+    size_t j, k, p, l = 1;
+    size_t i = begin + d_size;//current row
+    size_t number_of_blocks = (c_size - 1)/ d_size + 1;
+    size_t tmp_LA = (begin+d_size)*(begin+d_size+1)/2 + begin;
+    std::memset(B, 0, d_size * d_size * sizeof(FP));
+    for(p = 0; p < number_of_blocks; p++){
+        size_t len_of_block = std::min(d_size, N - i);
+        size_t tmp = len_of_block + i;
+        for (; i < tmp; i++) {
+            for (j = begin; j < end; j++) {
+                for (k = begin; k <= j; k++) {
+                    B[(i % d_size)*d_size + (j - begin)] += D(k - begin, j - begin)  * LA(k, i);
+                }
+            }
+        }
+        for(j = 0; j < len_of_block; j++){
+            std::memcpy(LA.m + tmp_LA, B + j * d_size, d_size*sizeof(FP));
+            tmp_LA += begin + d_size + l;
+            l++;
+        }
+        std::memset(B, 0, d_size * d_size * sizeof(FP));
+    }
+
+}
+
+void Cholesky::inverse_matrix(size_t begin) {
+    size_t n = d_size;
     size_t i, j, k;
-    size_t tmp = 0;
+    size_t tmp = begin + begin*(begin+1)/2;
     FP koef;
-    FP* inverse = new FP[n*n*2];
-    for(i = 0; i < n; i++){
-        std::memcpy(inverse + i * 2 * n, M.m + tmp, (i + 1) * sizeof(FP));
-        tmp += i + 1;
-        inverse[i*2*n + n + i] = 1;
-    }
-    for(i = 0; i < n; i++){
-        for(j = i; j < n; j++){
-            inverse[i*2*n + j] = inverse[j*2*n + i];
-        }
-    }
-    for(i = 0; i < n; i++){
-        koef = inverse[i*2*n + i];
-        for(j = 0; j <= n + i; j++){
-            inverse[i*2*n + j] /= koef;
-        }
-        for(j = 0; j < i; j++){
-            koef = inverse[j*2*n + i];
-            for(k = 0; k < 2*n; k++){
-                inverse[j*2*n + k] -= koef*inverse[i*2*n + k];
-            }
-        }
-        for(j = i + 1; j < n; j++){
-            koef = inverse[j*2*n + i];
-            for(k = 0; k < 2*n; k++){
-                inverse[j*2*n + k] -= koef*inverse[i*2*n + k];
-            }
-        }
-    }
-    tmp = 0;
-    for(i = 0; i < n; i++){
-        std::memcpy(M.m + tmp, inverse + i * 2 * n + n, (i + 1) * sizeof(FP) );
-        tmp += i + 1;
-    }
-    delete[] inverse;
-}
-
-void Cholesky::inverse_lower(matrix& M){
-    size_t n = M.matrix_size;
-    size_t i, j, k;
-    size_t tmp = 0;
-    FP koef;
-    FP* inverse = new FP[n*n*2];
-    for(i = 0; i < n; i++){
-        std::memcpy(inverse + i * 2 * n, M.m + tmp, (i + 1) * sizeof(FP));
-        tmp += i + 1;
-        inverse[i*2*n + n + i] = 1;
-    }
-    for(i = 0; i < n; i++){
-        koef = inverse[i*2*n + i];
-        for(j = 0; j <= n + i; j++){
-            inverse[i*2*n + j] /= koef;
-        }
-        for(j = i + 1; j < n; j++){
-            koef = inverse[j*2*n + i];
-            for(k = 0; k < 2*n; k++){
-                inverse[j*2*n + k] -= koef*inverse[i*2*n + k];
-            }
-        }
-    }
-    tmp = 0;
-    for(i = 0; i < n; i++){
-        std::memcpy(M.m + tmp, inverse + i * 2 * n + n, (i + 1) * sizeof(FP) );
-        tmp += i + 1;
-    }
-    delete[] inverse;
-}
-
-void Cholesky::print(FP* B,size_t n){
-    size_t i,j;
     for (i = 0; i < n; i++) {
-        for(j = 0; j < 2*n; j++)
-            std::cout << B[i*2*n+j] << " ";
-        std::cout << std::endl;
-    }
-    std::cout << std::endl;
-}
-
-void Cholesky::Print_matrix(FP* B){
-    std::cout << "??????:" << std::endl;
-    size_t i,j;
-    for (i = 0; i < c_size; i++) {
-        for(j = 0; j < d_size; j++)
-            printf(" %.11f ", B[i*d_size+j]);
-        std::cout << std::endl;
-    }
-    std::cout << std::endl;
-}
-
-void Cholesky::Print_trans_matrix(FP* B){
-    std::cout << "??????:" << std::endl;
-    size_t i,j;
-    for (i = 0; i < d_size; i++) {
-        for(j = 0; j < c_size; j++)
-            printf(" %.11f ", B[j*d_size+i]);
-        std::cout << std::endl;
-    }
-    std::cout << std::endl;
-}
-
-void Cholesky::Cholesky_dec(matrix& M, matrix& L) {
-    L(0,0) = sqrt(M(0,0));
-    size_t i, j, p;
-    for(j = 1; j < M.matrix_size; j++){
-        i = 0; 
-        L(i,j) = M(i,j) / L(0,0);
-    }
-    for (i = 1; i < M.matrix_size; i++){
-        FP sum = 0;
-        for (p = 0; p < i; p++){
-            sum += (L(p,i) * L(p,i));
+        std::memcpy(inverse + i * 2 * n, LA.m + tmp, (i + 1) * sizeof(FP));
+        tmp += i + 1 + begin;
+        inverse[i * 2 * n + n + i] = 1.;
+    }  
+    for (i = 0; i < n; i++) {
+        for (j = i; j < n; j++) {
+            inverse[i * 2 * n + j] = inverse[j * 2 * n + i];
         }
-        L(i,i) = sqrt(std::abs(M(i,i) - sum));
-        for (j = i + 1; j < M.matrix_size; j++){
-            sum = 0;
-            for (p = 0; p < i; p++){
-                sum += L(p,i) * L(p,j);
+    }
+    for (i = 0; i < n; i++) {
+        koef = inverse[i * 2 * n + i];
+        for (j = 0; j <= n + i; j++) {
+            inverse[i * 2 * n + j] /= koef;
+        }
+        for (j = 0; j < i; j++) {
+            koef = inverse[j * 2 * n + i];
+            for (k = 0; k < 2 * n; k++) {
+                inverse[j * 2 * n + k] -= koef * inverse[i * 2 * n + k];
             }
-            L(i,j) = (M(i,j) - sum) / L(i,i);
+        }
+        for (j = i + 1; j < n; j++) {
+            koef = inverse[j * 2 * n + i];
+            for (k = 0; k < 2 * n; k++) {
+                inverse[j * 2 * n + k] -= koef * inverse[i * 2 * n + k];
+            }
+        }
+    }
+    tmp = 0;
+    for(i = 0; i < n; i++){
+        std::memcpy(D.m + tmp, inverse + i * 2 * n + n, (i + 1) * sizeof(FP) );
+        tmp += i + 1;
+    }
+    std::memset(inverse, 0.0, d_size * d_size * 2 * sizeof(FP));
+}
+
+void Cholesky::inverse_lower(size_t begin) {
+    size_t i, j, k;
+    FP koef;
+    std::memset(D.m, 0, d_size * (d_size + 1) / 2 * sizeof(FP));
+    for (i = 0; i < d_size; i++) {
+        koef = LA(i + begin, i + begin);
+        for (j = 0; j < i; j++) {
+            D(j, i) /= koef;
+        }
+        D(j, i) = 1.0 / koef;
+        for (j = i + 1; j < d_size ; j++) {
+            koef = LA(i + begin, j + begin);
+            for (k = 0; k <= i; k++) {
+                D(k, j) -= koef * D(k, i);
+            }
         }
     }
 }
 
-void Cholesky::Positive_definite_symmetric_matrix_generator(){
+void Cholesky::print(const FP* B, const size_t n) {
+    size_t i, j;
+    for (i = 0; i < n; i++) {
+        for (j = 0; j <  n; j++)
+            std::cout << B[i *n + j] << " ";
+        std::cout << std::endl;
+    }
+    std::cout << std::endl;
+}
+
+void Cholesky::Print_matrix(const FP* B) {
+    std::cout << "??????:" << std::endl;
+    size_t i, j;
+    for (i = 0; i < c_size; i++) {
+        for (j = 0; j < d_size; j++)
+            printf(" %.11f ", B[i * d_size + j]);
+        std::cout << std::endl;
+    }
+    std::cout << std::endl;
+}
+
+void Cholesky::Print_trans_matrix(const FP* B) {
+    std::cout << "??????:" << std::endl;
+    size_t i, j;
+    for (i = 0; i < d_size; i++) {
+        for (j = 0; j < c_size; j++)
+            printf(" %.11f ", B[j * d_size + i]);
+        std::cout << std::endl;
+    }
+    std::cout << std::endl;
+}
+
+void Cholesky::Cholesky_dec(size_t begin, size_t end) {
+    LA(begin, begin) = sqrt(LA(begin, begin));
+    size_t i, j, p;
+    for (j = begin + 1; j < end; j++) {
+        i = begin;
+        LA(i, j) = LA(i, j) / LA(begin, begin);
+    }
+    for (i = begin + 1; i < end; i++) {
+        FP sum = 0;
+        for (p = begin; p < i; p++) {
+            sum += (LA(p, i) * LA(p, i));
+        }
+        LA(i, i) = sqrt(std::abs(LA(i, i) - sum));
+        for (j = i + 1; j < end; j++) {
+            sum = 0;
+            for (p = begin; p < i; p++) {
+                sum += LA(p, i) * LA(p, j);
+            }
+            LA(i, j) = (LA(i, j) - sum) / LA(i, i);
+        }
+    }
+}
+
+void Cholesky::Positive_definite_symmetric_matrix_generator() {
     unsigned int seed = 123;
     std::mt19937_64 generator(seed);
     std::uniform_real_distribution<FP> distribution(-100.0, 100.0);
-    size_t i,j;
-    for(i = 0; i < N; i++)
-        for(j = 0; j < i; j++){
-            A(j,i) = distribution(generator);
+    size_t i, j;
+    for (i = 0; i < N; i++)
+        for (j = 0; j < i; j++) {
+            A(j, i) = distribution(generator);
+            LA(j,i) = A(j,i);
         }
 
-    for(i = 0; i < N; i++){
-        FP s = 0; 
-        for(j = 0; j < i; j++){
-                s += std::abs(A(j, i));
+    for (i = 0; i < N; i++) {
+        FP s = 0;
+        for (j = 0; j < i; j++) {
+            s += std::abs(A(j, i));
         }
-        for(j = i + 1; j < N; j++){
-                s += std::abs(A(i, j));
+        for (j = i + 1; j < N; j++) {
+            s += std::abs(A(i, j));
         }
-        std::uniform_real_distribution<FP> distribution_2(s, 1000.0);
-        A(i,i) = distribution_2(generator);
+        std::uniform_real_distribution<FP> distribution_2(1.0, 1000.0);
+        A(i, i) = s + distribution_2(generator);
+        LA(i, i) = A(i, i);
+
     }
 }
 
-void Cholesky::Decomposition_check(){
-    size_t i,j,k;
-    for(i = 0; i < N; i++){
-        for(j = 0; j <= i; j++){
+void Cholesky::Decomposition_check() {
+    size_t i, j, k;
+    for (i = 0; i < N; i++) {
+        for (j = 0; j <= i; j++) {
             FP aij = 0;
-            for(k = 0; k <= j; k++){
-                aij += LA(k,i) * LA(k,j);
+            for (k = 0; k <= j; k++) {
+                aij += LA(k, i) * LA(k, j);
             }
-            A_check(j,i) = aij;
-            FP tmp = std::abs(aij - A(j,i));
-            if(tmp > norm_max){
+            A_check(j, i) = aij;
+            FP tmp = std::abs(aij - A(j, i));
+            if (tmp > norm_max) {
                 norm_max = tmp;
-                aij_with_norm_max = A(j,i);
+                aij_with_norm_max = A(j, i);
             }
         }
     }
 }
 
-void Cholesky::Print_symmetric_matrix(matrix& L){
+void Cholesky::Print_symmetric_matrix(const matrix& L) {
     std::cout << "Symmetric Matrix :" << std::endl;
-    size_t i,j;
-    for(i = 0; i < L.matrix_size; i++){
-        for(j = 0; j < i; j++){
-            std::cout << L(j, i)<<' ';
+    size_t i, j;
+    for (i = 0; i < L.matrix_size; i++) {
+        for (j = 0; j < i; j++) {
+            std::cout << L(j, i) << " ";
         }
-        for(j = i; j < L.matrix_size; j++){
-            std::cout << L(i, j)<<' ';
+        for (j = i; j < L.matrix_size; j++) {
+            std::cout << L(i, j) << " ";
         }
-        std::cout<<std::endl;
+        std::cout << std::endl;
     }
     std::cout << std::endl;
 }
 
-void Cholesky::Print_lower(matrix& L){
+void Cholesky::Print_lower(const matrix& L) {
     std::cout << "Lower Triangular Matrix (L):" << std::endl;
     size_t i, j;
     for (i = 0; i < N; i++) {
-        for(j = 0; j <= i; j++)
+        for (j = 0; j <= i; j++)
             std::cout << L(j, i) << " ";
         std::cout << std::endl;
     }
     std::cout << std::endl;
 }
 
-void Cholesky::Print_check_matrix(){
+void Cholesky::Print_check_matrix() {
     std::cout << "Check Matrix (A = LLт):" << std::endl;
     size_t i, j;
-    for(i = 0; i < N; i++){
-        for(j = 0; j < i; j++){
-            std::cout << A_check(j, i)<<' ';
+    for (i = 0; i < N; i++) {
+        for (j = 0; j < i; j++) {
+            std::cout << A_check(j, i) << ' ';
         }
-        for(j = i; j < N; j++){
-            std::cout << A_check(i, j)<<' ';
+        for (j = i; j < N; j++) {
+            std::cout << A_check(i, j) << ' ';
         }
-        std::cout<<std::endl;
+        std::cout << std::endl;
     }
     std::cout << std::endl;
 }
 
-void Cholesky::analyse(){
+void Cholesky::analyse() {
     Positive_definite_symmetric_matrix_generator();
+    //Print_symmetric_matrix(A);
     auto start = std::chrono::high_resolution_clock::now();
-    Cholesky_dec_block();
+    //Cholesky_dec(0, N);
+    Cholesky_dec_block(0);
     auto end = std::chrono::high_resolution_clock::now();
-    Decomposition_check();
-    Cholesky_dec(A, LA);
-    LA.Print();
+    //Print_symmetric_matrix(A);
+    //Print_lower(LA);
+    //Decomposition_check();
+    //Print_check_matrix();
     printf("_______________________________________________________________________________\n");
     std::cout << "Matrix size = " << N << std::endl;
+    std::cout << "A block size = " << d_size << std::endl;
     printf("Chebyshev's norm =  %.10f in aij = %.10f\n", norm_max, aij_with_norm_max);
-    printf("The maximum error is %.40f %% \n", std::abs(norm_max*aij_with_norm_max/100));
+    printf("The maximum error is %.40f %% \n", std::abs(norm_max * aij_with_norm_max / 100));
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
     std::cout << "Cholesky decomposition time : " << duration << " microseconds." << std::endl;
 
@@ -344,11 +385,25 @@ void Cholesky::analyse(){
 
 
 
+// void test(){
+//     Cholesky test1(8000, 8000);
+//     test1.analyse();
+//     for(size_t i = 20; i <= 200; i++){
+//         Cholesky test(8000, i);
+//         test.analyse();
+//     }
+    
+// }
+
 int main() {
+    //test();
     size_t n;
     std::cout << "Enter matrix size:";
     std::cin >> n;
-    Cholesky test(n);
+    size_t num;
+    std::cout << "Enter block size:";
+    std::cin >> num;
+    Cholesky test(n, num);
     test.analyse();
     return 0;
 }
