@@ -5,6 +5,7 @@
 #include <chrono>
 #include <cstring>
 #include <stdlib.h>
+#include <omp.h>
 typedef double FP;
 class Cholesky {
 private:
@@ -46,11 +47,12 @@ private:
     matrix A_check;
     matrix LA;
     matrix D;
-    FP* B;
     FP* inverse;
+    FP* B_copy;
     void double_multiplication_and_subtraction_matrix(size_t begin);
-    //void multiplication_and_subtraction_matrix(const FP* A, const FP* B, matrix& dest);
-    void multiplication_lower(size_t begin);
+    void multiplication_and_substraction_matrix_DB(size_t begin);
+    void multiplication_inverse_matrix(size_t begin);
+    void multiplication_inverse_lower(size_t begin);
     void inverse_matrix(size_t begin);
     void inverse_lower(size_t begin);
     void Cholesky_dec_block( size_t n);
@@ -60,28 +62,21 @@ private:
     void Print_symmetric_matrix(const matrix& M);
     void Print_lower(const matrix& L);
     void Print_check_matrix();
-    void print(const FP* B, size_t n);
+    void print(const FP* B);
     void Print_matrix(const FP* B);
     void Print_trans_matrix(const FP* B);
 
 public:
     Cholesky(size_t N_size, size_t len) : N(N_size), d_size(len),
         c_size(N_size - d_size), A(N_size), A_check(N_size), LA(N_size), D(d_size){
-            B = static_cast<FP*>(malloc(d_size * d_size * sizeof(FP)));
-            std::memset(B, 0, d_size * d_size * sizeof(FP));
-            inverse = static_cast<FP*>(malloc(d_size * d_size * 2 * sizeof(FP)));
-            std::memset(inverse, 0.0, d_size * d_size * 2 * sizeof(FP));
+            inverse = static_cast<FP*>(malloc(d_size * d_size * sizeof(FP)));
+            std::memset(inverse, 0.0, d_size * d_size * sizeof(FP));
+            B_copy = static_cast<FP*>(malloc(d_size * c_size * sizeof(FP)));
+            std::memset(B_copy, 0.0, d_size * c_size * sizeof(FP));
         }
-    // Cholesky(size_t N_size) : N(N_size),
-    //     c_size(N_size - d_size), A(N_size), A_check(N_size), LA(N_size), D(d_size){
-    //         B = static_cast<FP*>(malloc(d_size * d_size * sizeof(FP)));
-    //         std::memset(B, 0, d_size * d_size * sizeof(FP));
-    //         inverse = static_cast<FP*>(malloc(d_size * d_size * 2 * sizeof(FP)));
-    //         std::memset(inverse, 0.0, d_size * d_size * 2 * sizeof(FP));
-    //     }
     ~Cholesky() {
-        free(B);
         free(inverse);
+        free(B_copy);
     }
     void analyse();
 
