@@ -1,0 +1,90 @@
+Matrix size = 10000
+A block size = 10000
+Cholesky decomposition time : 125032164 microseconds.
+
+
+Matrix size = 10000
+A block size = 100
+Cholesky decomposition time : 38261901 microseconds.
+
+
+Matrix size = 10000
+A block size = 101
+Cholesky decomposition time : 40843441 microseconds.
+
+
+Matrix size = 10000
+A block size = 102
+Cholesky decomposition time : 42109751 microseconds.
+
+
+Matrix size = 10000
+A block size = 103
+Cholesky decomposition time : 40953064 microseconds.
+
+
+Matrix size = 10000
+A block size = 104
+Cholesky decomposition time : 41379289 microseconds.
+
+
+Matrix size = 10000
+A block size = 105
+Cholesky decomposition time : 42201716 microseconds.
+
+
+Matrix size = 10000
+A block size = 106
+Cholesky decomposition time : 45026293 microseconds.
+
+
+Matrix size = 10000
+A block size = 107
+Cholesky decomposition time : 43178749 microseconds.
+
+
+Matrix size = 10000
+A block size = 108
+Cholesky decomposition time : 44328713 microseconds.
+
+
+Matrix size = 10000
+A block size = 109
+Cholesky decomposition time : 43987067 microseconds.
+
+
+Matrix size = 10000
+A block size = 110
+Cholesky decomposition time : 45011607 microseconds.
+
+
+Matrix size = 10000
+A block size = 111
+Cholesky decomposition time : 44796089 microseconds.
+
+
+Matrix size = 10000
+A block size = 112
+Cholesky decomposition time : 45292979 microseconds.
+
+
+Matrix size = 10000
+A block size = 113
+Cholesky decomposition time : 45440313 microseconds.
+
+
+Matrix size = 10000
+A block size = 114
+Cholesky decomposition time : 46240716 microseconds.
+
+
+Matrix size = 10000
+A block size = 115
+Cholesky decomposition time : 46950455 microseconds.
+
+
+Matrix size = 10000
+A block size = 116
+Cholesky decomposition time : 47419258 microseconds.
+
+
