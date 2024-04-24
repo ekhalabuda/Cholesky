@@ -1,4 +1,5 @@
 #include "Cholesky.h"
+#include <fstream>
 // Description
 //
 // Results:
@@ -72,21 +73,35 @@ void Cholesky::Cholesky_dec_block(size_t n) {
 
 
 void Cholesky::multiplication_and_substraction_matrix_DB(size_t begin){
-    size_t j, k, p, h;
-    size_t i = begin + d_size;//current row
     size_t number_of_blocks = (c_size - 1)/ d_size + 1;
-    #pragma omp parallel for schedule(dynamic, 4) private(h, i, j, k, p)
-    for(p = 0; p < number_of_blocks; p++){
-        size_t len_of_block = std::min(d_size,  N - begin - d_size*(p+1));
-        for(h = 0; h < p; h++){
-            for(i = begin + d_size*(p+1); i < begin + d_size*(p+1) + len_of_block; i++){
-                for(j = begin + d_size*(h+1); j < begin + d_size*(h+2); j++){
-                    for(k = begin + d_size*(h+1); k < begin + d_size*(h+2); k++){
-                        LA(j, i) -= B_copy[(i - begin - d_size) * d_size + (k - begin - d_size*(h+1))] * LA(k-d_size*(h+1), j);
-                    }
+    // разделим на пары блоков
+    size_t tmp = 0;
+    for (size_t i = 0; i < number_of_blocks; i++){
+        for(size_t j = i+1; j < number_of_blocks; j++){
+            col_number_block[tmp] = i;
+            row_number_block[tmp] = j;
+            tmp++;
+        }
+    }
+    #pragma omp parallel for schedule(dynamic, 4)
+    for(size_t p = 0; p < tmp; p++){
+        size_t i, j, k, row, col;
+        row = row_number_block[p];
+        col = col_number_block[p];
+        size_t len_of_block_row = std::min(d_size,  N - begin - d_size*(row+1));
+        size_t len_of_block_col = std::min(d_size,  N - begin - d_size*(col+1));
+        for(i = begin + d_size*(row+1); i < begin + d_size*(row+1) + len_of_block_row; i++){
+            for(j = begin + d_size*(col+1); j < begin + d_size*(col+1)+ len_of_block_col; j++){
+                for(k = begin + d_size*(col+1); k < begin + d_size*(col+1)+ len_of_block_col; k++){
+                    LA(j, i) -= B_copy[(i - begin - d_size) * d_size + (k - begin - d_size*(col+1))] * LA(k-d_size*(col+1), j);
                 }
             }
         }
+    }
+    #pragma omp parallel for schedule(dynamic, 4)
+    for(size_t p = 0; p < number_of_blocks; p++){
+        size_t i, j, k;
+        size_t len_of_block = std::min(d_size,  N - begin - d_size*(p+1));
         for(i = begin + d_size*(p+1); i < begin + d_size*(p+1) + len_of_block; i++){
             for(j = begin + d_size*(p+1); j <= i; j++){
                 for(k = begin + d_size*(p+1); k < begin + d_size*(p+2); k++){
@@ -98,8 +113,9 @@ void Cholesky::multiplication_and_substraction_matrix_DB(size_t begin){
 
 }
 
+
 void Cholesky::multiplication_inverse_matrix(size_t begin){
-    size_t i, j, k, p;
+    size_t i, j, k;
     size_t tmp = begin + begin*(begin+1)/2;
     FP koef, koef1;
     size_t block_size = d_size*d_size;
@@ -117,19 +133,30 @@ void Cholesky::multiplication_inverse_matrix(size_t begin){
         std::memcpy(B_copy + i * d_size, LA.m + tmp, d_size * sizeof(FP));
         tmp += d_size + i + 1 + begin;
     }
-
     for (i = 0; i < d_size; i++) {
         koef = inverse[i * d_size + i];
+        for(j = 0; j < d_size; j++){
+            inverse[i * d_size + j] /= koef;
+        }
+        #pragma omp parallel for
+        for (size_t p = 0; p < number_of_blocks; p++){
+            size_t h;
+            size_t len_of_block = std::min(block_size, c_size - block_size * p);
+            for (h = block_size * p; h < block_size * p + len_of_block; h++){
+                B_copy[h * d_size + i] /= koef;
+            }
+        }
         for (j = 0; j < i; j++) {
             koef1 = inverse[j * d_size + i];
             for (k = 0; k < d_size; k++) {
-                inverse[j * d_size + k] -= koef1 * inverse[i * d_size + k] / koef;
+                inverse[j * d_size + k] -= koef1 * inverse[i * d_size + k];
             }
-            #pragma omp parallel for private(p, k)
-            for (p = 0; p < number_of_blocks; p++){
+            #pragma omp parallel for
+            for (size_t p = 0; p < number_of_blocks; p++){
+                size_t h;
                 size_t len_of_block = std::min(block_size, c_size - block_size * p);
-                for (k = block_size * p; k < block_size * p + len_of_block; k++){
-                    B_copy[k * d_size + j] -= koef1 * B_copy[k * d_size + i] / koef;
+                for (h = block_size * p; h < block_size * p + len_of_block; h++){
+                    B_copy[h * d_size + j] -= koef1 * B_copy[h * d_size + i];
                 }
             }
         }
@@ -138,11 +165,12 @@ void Cholesky::multiplication_inverse_matrix(size_t begin){
             for (k = 0; k < d_size; k++) {
                 inverse[j * d_size + k] -= koef1 * inverse[i * d_size + k];
             }
-            #pragma omp parallel for private(p, k)
-            for (p = 0; p < number_of_blocks; p++){
+            #pragma omp parallel for
+            for (size_t p = 0; p < number_of_blocks; p++){
+                size_t h;
                 size_t len_of_block = std::min(block_size, c_size - block_size * p);
-                for (k = block_size * p; k < block_size * p + len_of_block; k++){
-                    B_copy[k * d_size + j] -= koef1 * B_copy[k * d_size + i];
+                for (h = block_size * p; h < block_size * p + len_of_block; h++){
+                    B_copy[h * d_size + j] -= koef1 * B_copy[h * d_size + i];
                 }
             }
         }
@@ -151,14 +179,16 @@ void Cholesky::multiplication_inverse_matrix(size_t begin){
 }
 
 void Cholesky::multiplication_inverse_lower(size_t begin) {
-    size_t i, j, k, p;
-    FP koef, koef1;
+    size_t i;
+    FP koef;
     size_t block_size = d_size*d_size;
     size_t number_of_blocks = (c_size - 1)/ block_size + 1;
     for (i = begin; i < d_size + begin; i++) {
         koef = LA(i, i);
-        #pragma omp parallel for private(j,k,koef1)
-        for (p = 0; p < number_of_blocks; p++){
+        #pragma omp parallel for
+        for (size_t p = 0; p < number_of_blocks; p++){
+            FP koef1;
+            size_t j, k;
             size_t len_of_block = std::min(block_size, N - begin - block_size*p - d_size);
             for (j = begin + block_size*p + d_size; j < begin + block_size*p+d_size + len_of_block; j++) {
                 LA(i, j) /= koef;
@@ -258,7 +288,7 @@ void Cholesky::inverse_lower(size_t begin) {
 
 void Cholesky::print(const FP* B) {
     size_t i, j;
-    for (i = 0; i < c_size; i++) {
+    for (i = 0; i < d_size; i++) {
         for (j = 0; j < d_size; j++)
             std::cout << B[i *d_size + j] << " ";
         std::cout << std::endl;
@@ -373,6 +403,7 @@ void Cholesky::Decomposition_check() {
     }
 }
 
+
 void Cholesky::analyse() {
     Positive_definite_symmetric_matrix_generator();
     //Print_symmetric_matrix(A);
@@ -389,20 +420,65 @@ void Cholesky::analyse() {
     std::cout << "A block size = " << d_size << std::endl;
     printf("Chebyshev's norm =  %.10f in aij = %.10f\n", norm_max, aij_with_norm_max);
     printf("The maximum error is %.40f %% \n", std::abs(norm_max * aij_with_norm_max / 100));
-    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-    std::cout << "Cholesky decomposition time : " << duration << " microseconds." << std::endl;
+    int64_t duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+    std::cout << "Cholesky decomposition time : " << duration << " microseconds." << std::endl << std::endl;
+    
+
+    //test_mkl();
+    //std::cout << "MKL time : " << mkl_time << " microseconds." << std::endl;
+ 
+}
+
+void Cholesky::analyse(std::ofstream& outputFile) {
+    Positive_definite_symmetric_matrix_generator();
+    //Print_symmetric_matrix(A);
+    auto start = std::chrono::high_resolution_clock::now();
+    Cholesky_dec_block(0);
+    auto end = std::chrono::high_resolution_clock::now();
+    int64_t duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+
+    outputFile << "Matrix size = " << N << '\n';
+    outputFile << "A block size = " << d_size << '\n';
+    outputFile << "Cholesky decomposition time : " << duration << " microseconds." << "\n\n\n";
  
 }
 
 
+void Cholesky::test_mkl() {
+    // Матрица A
+    FP* A_mkl = static_cast<FP*>(malloc(N * N * sizeof(FP)));
+    int info = 0;
+    size_t i, j;
+    int n = N;
+
+    // Копирование матрицы A в матрицу A_mkl
+    for (i = 0; i < N; i++) {
+        for(j = 0; j <= i; j++){
+            A_mkl[i*N+j] = A(j,i);
+            A_mkl[j*N+i] = A(j,i);
+        }
+    }
+
+    // Вызов функции dpotrf для вычи разложения Холецкого
+    auto start = std::chrono::high_resolution_clock::now();
+    dpotrf("U", &n, A_mkl, &n, &info);
+    auto end = std::chrono::high_resolution_clock::now();
+    mkl_time = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+
+    
+    free(A_mkl);
+
+}  
 
 void test(){
-    Cholesky test1(5000, 5000);
-    test1.analyse();
-    for(size_t i = 100; i <= 160; i++){
-        Cholesky test(5000, i);
-        test.analyse();
+    std::ofstream outputFile("output.txt");
+    Cholesky test1(10000, 10000);
+    test1.analyse(outputFile);
+    for(size_t i = 100; i <= 116; i++){
+        Cholesky test(10000, i);
+        test.analyse(outputFile);
     }
+    outputFile.close();
 }
 
 int main() {
